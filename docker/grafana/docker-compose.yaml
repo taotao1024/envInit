@@ -1,0 +1,20 @@
+version: '3'
+services:
+  # Grafana
+  grafana:
+    image: bitnami/grafana
+    container_name: grafana
+    privileged: true
+    environment:
+      - 'GF_SECURITY_ADMIN_USER=admin'
+      - 'GF_SECURITY_ADMIN_PASSWORD=admin'
+      - 'GF_SERVER_HTTP_PORT=3000'
+      - 'TZ=Asia/Shanghai'
+    ports:
+      - 13000:3000
+    logging:
+      driver: json-file
+      options:
+        max-size: "200k"
+        max-file: "10"
+    restart: always
