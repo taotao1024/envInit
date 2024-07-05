@@ -1,0 +1,94 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'tag', defaultValue: 'V1', description: '目标版本')
+    }
+
+    environment {
+        // 声明式变量
+        CC = 'clang'
+    }
+
+    tools{
+        gradle 'Gradle-4.10.2'
+        jdk 'Local-JDK8'
+    }
+
+    options {
+        // 配置全局超时时间15分钟，超过15分钟后 停止构建
+        timeout(time: 15, unit: 'MINUTES')
+    }
+
+    stages {
+        stage('Pull') {
+            steps {
+                sh 'printenv'
+                timeout(time: 5, unit: 'MINUTES') {
+                    retry(3) {
+                        git branch: 'develop', credentialsId: 'e1830887-15fc-444c-9d7d-ad2a1e5efc88', url: 'http://git.koal.com/SZTV6_5_X_Maintain/szt0901_ca.git'
+                    }
+                }
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh 'gradle -version'
+                // sh '/usr/local/gradle/gradle-4.10.2/bin/gradle clean --refresh-dependencies  zip'
+                sh 'rm -rf SZT0901-KOALCA*'
+                sh 'cp build/distributions/*.zip .'
+                script {
+                    // 脚本式变量
+                    env.ZIP_NAME = sh(returnStdout: true, script: 'ls | grep SZT0901-KOALCA-*.zip | awk \'{print $1}\'')
+                }
+                sh 'unzip -q ${ZIP_NAME}'
+                sh 'cd SZT0901-KOALCA && ./koalca.sh start'
+            }
+        }
+
+        stage('Test') {
+            steps {
+                sleep 5
+                sh 'curl http://127.0.0.1:8880'
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                echo 'Deploying....'
+            }
+        }
+
+        stage('Back') {
+            steps {
+                // 备份 将文件复制到 201 机器的 /usr/local/dockerSpac/koal 中
+                sshPublisher(publishers: [sshPublisherDesc(configName: '10.2.3.201', transfers: [sshTransfer(cleanRemote: false, excludes: '', execCommand: 'mv /usr/local/dockerSpac/koal/back/SZT0901-KOALCA-6.8.8-r20240705.zip  /usr/local/dockerSpac/koal/back/`date +%F_%T`_SZT0901-KOALCA-6.8.8-r20240705_$tag.zip', execTimeout: 120000, flatten: false, makeEmptyDirs: false, noDefaultExcludes: false, patternSeparator: '[, ]+', remoteDirectory: '/usr/local/dockerSpac/koal/back', remoteDirectorySDF: false, removePrefix: 'build/distributions/', sourceFiles: 'build/distributions/*')], usePromotionTimestamp: false, useWorkspaceInPromotion: false, verbose: false)])
+                echo 'Back To 201 Successful'
+            }
+        }
+    }
+
+    post {
+        always {
+            echo 'This will always run'
+        }
+        success {
+sshPublisher(publishers: [sshPublisherDesc(configName: '10.2.3.201', transfers: [sshTransfer(cleanRemote: false, excludes: '', execCommand: '''
+rm -rf SZT0901-KOALCA*
+unzip -q /usr/local/dockerSpac/koal/SZT0901-KOALCA-6.8.8-r20240705.zip -d /usr/local/dockerSpac/koal/
+''', execTimeout: 120000, flatten: false, makeEmptyDirs: false, noDefaultExcludes: false, patternSeparator: '[, ]+', remoteDirectory: '/usr/local/dockerSpac/koal', remoteDirectorySDF: false, removePrefix: 'build/distributions/', sourceFiles: 'build/distributions/*')], usePromotionTimestamp: false, useWorkspaceInPromotion: false, verbose: false)])
+            echo 'Start CA Successful'
+        }
+        failure {
+            echo 'This will run only if failed'
+        }
+        unstable {
+            echo 'This will run only if the run was marked as unstable'
+        }
+        changed {
+            echo 'This will run only if the state of the Pipeline has changed'
+            echo 'For example, if the Pipeline was previously failing but is now successful'
+        }
+    }
+}
