@@ -1,5 +1,4 @@
 # alertManager 脚本
-
 localPath=`pwd`
 
 rm -rf config
@@ -11,19 +10,30 @@ chown -R 1000:1000 ${localPath}
 
 
 cat >> ${localPath}/config/alertmanager.yml << EOF
+# 全局配置（global）
 global:
   resolve_timeout: 5m
 
+# 告警路由（route）
 route:
   group_by: ['alertname']
   group_wait: 10s
   group_interval: 10s
   repeat_interval: 1h
   receiver: 'web.hook'
+  routes:
+    - match_re:
+        alertname: .*
+      receiver: 'web.hook'
+      continue: true
+
+# 接收人（receivers）
 receivers:
 - name: 'web.hook'
   webhook_configs:
-  - url: 'http://10.2.3.210:5001/'
+  - url: 'http://192.168.0.210:5001/'
+
+# 抑制规则（inhibit_rules）
 inhibit_rules:
   - source_match:
       severity: 'critical'
