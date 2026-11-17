@@ -100,11 +100,31 @@ yum install -y yum-utils device-mapper-persistent-data lvm2
 
 # 6. 配置 Docker CE 源
 log_info "步骤 6/9：配置 Docker CE yum 源"
+# 先清除所有已存在的 Docker 相关 repo，避免官方残留源继续生效
+rm -f /etc/yum.repos.d/docker*.repo /etc/yum.repos.d/*docker*.repo
 if [[ "$USE_CN_MIRROR" == true ]]; then
-    yum-config-manager --add-repo https://mirrors.tuna.tsinghua.edu.cn/docker-ce/linux/centos/docker-ce.repo
+    # 阿里云 Docker CE 源（与 CentOS 源同厂商，链路更稳定）
+    cat > /etc/yum.repos.d/docker-ce.repo <<'EOF'
+[docker-ce-stable]
+name=Docker CE Stable - $basearch
+baseurl=https://mirrors.aliyun.com/docker-ce/linux/centos/$releasever/$basearch/stable
+enabled=1
+gpgcheck=1
+gpgkey=https://mirrors.aliyun.com/docker-ce/linux/centos/gpg
+EOF
 else
-    yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+    cat > /etc/yum.repos.d/docker-ce.repo <<'EOF'
+[docker-ce-stable]
+name=Docker CE Stable - $basearch
+baseurl=https://download.docker.com/linux/centos/$releasever/$basearch/stable
+enabled=1
+gpgcheck=1
+gpgkey=https://download.docker.com/linux/centos/gpg
+EOF
 fi
+# 刷新缓存，让新源立即生效
+yum clean all
+yum makecache fast || true
 
 # 7. 安装 Docker 及常用工具
 log_info "步骤 7/9：安装 docker-ce、buildx、compose 插件及 atop/jq"
